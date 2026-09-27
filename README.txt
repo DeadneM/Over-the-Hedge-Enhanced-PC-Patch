@@ -836,3 +836,244 @@ File:
   hedge_Win11_V11K_PROFILE_PARENT_CHAIN_DIAGNOSTIC.exe
 
 EXE SHA-256:
+  94086bbc5cccad3401b8fc069bb9b329268fc03b060a8d72cffe75a979c77602
+
+ZIP SHA-256:
+  0d4f1b8f437cb381bed12217b9f4b7208e178bd852fdd2f1231193b7815b16e0
+
+Log:
+  hedge_profile_chain.log
+
+Manual path result:
+
+  CHAIN_GLOBAL A=061C6430 B=061F36F0 C=00454460
+
+Interpretation:
+
+- The intermediate chain ended at the global fallback object.
+- [0x702828] was the active global UI object in that run.
+- The exact final handler was 0x454460.
+
+This was the first handler in the chain that was not just a forwarding stub.
+
+==========================================================================
+18. FINAL HIGH-LEVEL HANDLER DISCOVERY
+==========================================================================
+
+Static audit of 0x454460 found a dedicated branch for event:
+
+  0x8EE7556F
+
+That branch performs the following high-level native call:
+
+  sender = EUIDDSaveSlot
+  arg1   = [sender + 0x08]
+  arg2   = original event arg3
+  ECX    = global UI object
+
+  call 0x453DB0
+
+For the normal manual profile-confirmation event:
+
+  arg2 = 0
+
+Therefore the important native transition is:
+
+  ECX  = [0x702828]
+  arg1 = [EUIDDSaveSlot + 0x08]
+  arg2 = 0
+
+  call 0x453DB0
+
+Audit notes for 0x453DB0:
+
+- thiscall-style function.
+- Callee returns with RET 8.
+- Checks its object state, including [this+0x94].
+- Builds/dispatches the native high-level messages involved in the transition.
+- This is semantically above SGLoadSlot and above the intermediate UI
+  forwarders.
+
+==========================================================================
+19. V12A11 - FINAL VALIDATED AUTO-PROFILE
+==========================================================================
+
+Status: VALIDATED / CANONICAL
+
+File used for this canonical package:
+  hedge.exe
+
+Original development filename:
+  hedge_Win11_V12A11_AUTO_SINGLE_PROFILE_HIGHLEVEL_NATIVE_TEST.exe
+
+SHA-256:
+  4ffbb1a43e07c1f7e88b1c02a34b4c36d279009cf68e1da0ef4b0f103eb26067
+
+Detection logic:
+
+1. Observe native EUIDDSaveSlot indices 0..3 at 0x44D50D.
+2. Build a complete SEEN_MASK and USED_MASK.
+3. Require all four native indices to be observed.
+4. Require USED_MASK to contain exactly one bit.
+5. Remember the exact EUIDDSaveSlot widget and its exact native slot index.
+6. Wait for the genuine ready event 0x1579DAF8 on that same widget.
+7. Require two further complete stable slot cycles with the same unique widget.
+8. Perform the normal local housekeeping call around 0x52DDF0.
+9. Revalidate all critical pointers/state.
+10. Call the true high-level native profile transition exactly once:
+
+      ECX  = [0x702828]
+      arg1 = [unique EUIDDSaveSlot + 0x08]
+      arg2 = 0
+      call 0x453DB0
+
+Safety checks immediately before the call:
+
+- unique widget pointer still exists;
+- it is still the widget that received READY_EVENT;
+- native index remains 0..3;
+- global object [0x702828] exists;
+- [global+0x94] != 0.
+
+Behavior:
+
+- Exactly one used profile in visible slot 1, 2, 3 or 4:
+    that exact profile is activated automatically.
+- Zero used profiles:
+    selector remains vanilla/manual.
+- Two or more used profiles:
+    selector remains vanilla/manual.
+
+No fixed slot is assumed.
+
+This build was confirmed working by the user and is the new canonical base.
+
+==========================================================================
+20. PERMANENT EXCLUSIONS / DO-NOT-REINTRODUCE LIST
+==========================================================================
+
+The following approaches are intentionally excluded from future builds:
+
+1. Forced global maximum MSAA.
+2. Video/Tab attract-mode feature.
+3. Mouse-click emulation.
+4. Keyboard-input emulation.
+5. PostMessage/SendMessage coordinate-based profile confirmation.
+6. Forcing the native input result AL at 0x44D012.
+7. Direct SGLoadSlot / 0x42F260 as the auto-profile solution.
+8. 0x42F690 as the high-level profile-activation solution.
+9. Raw injection of final EUIDDSaveSlot event 0x8EE7556F as the auto-profile
+   solution.
+10. Any assumption that the unique profile must be in native index 0.
+11. Global HUD scaling unless a concrete HUD defect is demonstrated.
+12. Broad LOD/far-plane/shadow hacks without evidence of a specific need.
+
+==========================================================================
+21. FROZEN / PRESERVED BEHAVIOR
+==========================================================================
+
+The following are considered stable and should be preserved unless a future
+issue directly requires changing them:
+
+- LAA / 4 GB support.
+- Native borderless window strategy.
+- Desktop-sized HWND with independent render backbuffer.
+- Modern resolution list and Desktop mode.
+- Dynamic aspect / Hor+ behavior.
+- Native HUD anchoring.
+- AF16 implementation.
+- Trilinear/linear mip filtering path.
+- Conservative positive stage-0 MIP-bias clamp.
+- Native AA Off / 2x / 4x choices.
+- DPI awareness.
+- Native Alt+F4 quit flow.
+- Intro skip limited to lo01.dat..lo04.dat.
+- Auto-profile exact-one-slot rule and high-level 0x453DB0 transition.
+
+==========================================================================
+22. CANONICAL BASE FOR FUTURE WORK
+==========================================================================
+
+Future builds must start from the validated V12A11 executable contained in
+this archive unless a deliberate rollback is explicitly requested.
+
+Canonical V12A11 SHA-256:
+  4ffbb1a43e07c1f7e88b1c02a34b4c36d279009cf68e1da0ef4b0f103eb26067
+
+Packaging rule for future public/canonical ZIPs:
+
+  EXACTLY:
+    hedge.exe
+    README.txt
+
+The README is the cumulative technical notebook and should continue to record:
+
+- base executable and hashes;
+- build objective;
+- every modified offset/address;
+- original/replacement values where applicable;
+- caves/hooks/trampolines;
+- rationale;
+- test result;
+- rejected versions and why;
+- regressions;
+- frozen behavior;
+- next technical direction.
+
+==========================================================================
+END OF TECHNICAL NOTEBOOK - V12A11 CANONICAL
+==========================================================================
+
+==========================================================================
+24. TIMING AUDIT CONCLUSION - V12A12 / V12A12B
+==========================================================================
+
+STATUS:
+  AUDIT COMPLETE.
+  No timing patch retained.
+  V12A11 remained canonical during the diagnostic phase.
+
+The corrected V12A12B runtime log contained 120 samples.
+
+Observed native FPS:
+  minimum: 30
+  average: 57.3167
+  maximum: 60
+
+Observed RAW frame delta:
+  minimum: 0.016666668 s
+  average: 0.018000001 s
+  maximum: 0.033333335 s
+
+Observed GAME delta:
+  minimum: 0.016666668 s
+  average: 0.018297223 s
+  maximum: 0.052444443 s
+
+Tick count:
+  TICKS=1 : 112 / 120 samples
+  TICKS=2 :   8 / 120 samples
+
+Most important result:
+  RAW never dropped below the native 1/60-second floor.
+
+Therefore the tested build is not rendering at a higher refresh rate while
+gameplay remains pinned to 60 Hz. The feared high-refresh desynchronization
+was NOT observed.
+
+Conclusion:
+  Keep the native 60 Hz timing / fixed-step system unchanged.
+
+Frozen timing facts:
+  0x726864 = native PC fixed step ~= 1/60 s
+  0x6F26B0 = tick count
+  0x6F26B4 = gameplay delta
+  0x6F26B8 = native FPS estimate
+
+Rejected timing changes:
+  - do not replace 1/60 with 1/120;
+  - do not remove the gameplay-delta floor;
+  - do not alter the fixed-step/tick logic without new evidence.
+
+==========================================================================
+25. DIRECTINPUT AUDIT
