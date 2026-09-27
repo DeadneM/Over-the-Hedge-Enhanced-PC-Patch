@@ -281,3 +281,271 @@ Important rule:
   Preserve this native shutdown behavior in all future builds.
 
 SHA-256:
+  06ca4a6f0e9875f0f7bfd6181b54dd270694bb7128e45d2f42be766e09f01713
+
+
+V11 - STARTUP INTRO SKIP
+------------------------
+Status: VALIDATED
+Former canonical base before V12A11
+
+File:
+  hedge_Win11_V11_INTRO_SKIP_TEST.exe
+
+EXE SHA-256:
+  dcbf56965b8072afa84b368a06601db67867f3d4705d327a21078771f5339342
+
+Original test ZIP SHA-256:
+  9b6d5e4903c2fb44d57f55177b5339d09de5346f31a59086ddd61f87692e98ea
+
+Implementation:
+  Hook _BinkOpen@8 thunk at VA 0x683428
+  Trampoline cave 0x4EC600
+
+The hook performs a case-insensitive comparison of the last 8 characters of
+movie paths and returns NULL only for:
+
+  lo01.dat
+  lo02.dat
+  lo03.dat
+  lo04.dat
+
+Result:
+  Startup intro videos are skipped.
+  Story cutscenes remain untouched.
+
+==========================================================================
+3. VIDEO / ATTRACT-MODE EXPERIMENTS
+==========================================================================
+
+Status: ABANDONED BY DESIGN
+
+A separate series of experiments tried to start Bink/attract-mode video from
+UI input.
+
+Important findings:
+
+- The low-level QueueMovie path around 0x5911E0 could start Bink playback but
+  the movie remained behind the menu.
+- Forcing movieManager +0x08 = 2 caused the game to run accelerated and could
+  make mouse input disappear.
+- A movie-wrapper path around 0x42E400 was captured and tested.
+- Multiple V12/V12C/V12D/V12E video candidates were rejected.
+
+Permanent rule:
+  The video/Tab feature is abandoned.
+  Do NOT reintroduce it in future builds.
+
+==========================================================================
+4. AUTO-PROFILE RESEARCH: REQUIREMENT
+==========================================================================
+
+Final desired behavior:
+
+- Inspect all four native profile slots.
+- The physical/visible slot number must not matter.
+- If EXACTLY ONE slot is in use, automatically activate that profile.
+- If zero slots are used, remain fully vanilla/manual.
+- If two or more slots are used, remain fully vanilla/manual.
+- The auto path must use the game's own high-level native transition.
+- No simulated mouse.
+- No simulated keyboard.
+- No coordinate-based input.
+- No forced input-result branch.
+- No direct SGLoadSlot shortcut.
+- No raw final UI-event injection.
+
+Visible/native mapping:
+
+  visible slot 1 -> native index 0
+  visible slot 2 -> native index 1
+  visible slot 3 -> native index 2
+  visible slot 4 -> native index 3
+
+Important terminology:
+  User-facing slot numbers are 1..4.
+  Internal native indices are 0..3.
+
+==========================================================================
+5. AUTO-PROFILE: RELIABLE SLOT DETECTION
+==========================================================================
+
+The profile UI repeatedly presents four real EUIDDSaveSlot widgets.
+
+Class information:
+
+  EUIDDSaveSlot class string around 0x693238
+  EUIDDSaveSlot vtable around 0x6930B8
+  Forwarder at vtable +0x124 -> function 0x44C5E0
+  Receiver around 0x44D140
+
+Reliable SlotInUse observation point:
+  0x44D50D
+
+At that point:
+  ESI = actual EUIDDSaveSlot widget
+  EAX / then EBX = SlotInUse result
+  [ESI + 0xD4] = native slot index 0..3
+
+Reliable detection model:
+
+  SEEN_MASK = bitmask of native indices observed
+  USED_MASK = bitmask of indices whose SlotInUse != 0
+
+A complete cycle requires:
+  SEEN_MASK == 0x0F
+
+Exactly one profile requires USED_MASK to contain exactly one set bit.
+
+This detection method is retained in the final V12A11 implementation.
+
+==========================================================================
+6. AUTO-PROFILE: EARLY FAILED APPROACHES
+==========================================================================
+
+V12A / EARLY DIRECT LOAD
+------------------------
+Status: REJECTED
+
+Early attempts scanned profile slots and called a save-slot loading path
+around 0x42F260 directly.
+
+Result:
+  The save data could be touched, but this did not reproduce the complete UI
+  transition to an active profile/main menu state.
+
+Conclusion:
+  Direct SGLoadSlot is not the correct high-level profile-selection action.
+
+
+V12A2 / V12A3 - DEFERRED / UI-EVENT EXPERIMENTS
+------------------------------------------------
+Status: REJECTED
+
+Various deferred/run/WndProc and UI-event approaches were explored based on
+an early assumption about the selection event.
+
+Critical correction:
+  An earlier SLOT_ACTIVATE pointer was NOT a real EUIDDSaveSlot.
+  Event 0x762D502E belonged to the wrong UI class and must not be used for
+  auto-profile logic.
+
+==========================================================================
+7. V11F - PROFILE FLOW DIAGNOSTIC
+==========================================================================
+
+Status: DIAGNOSTIC
+
+File:
+  hedge_Win11_V11F_PROFILE_FLOW_DIAGNOSTIC.exe
+
+Original diagnostic EXE SHA-256:
+  82b4af1899617d0ce3d41549a26644664efdc237bfd7108f51e2a7a02916ed35
+
+Original diagnostic ZIP SHA-256:
+  6ef10725e57839c962838bf90c1bf43c42037648d10fc2898f5cfac98be486ac
+
+The diagnostic logged:
+
+  UNIQUE_SLOT
+  SAVESLOT_FORWARD
+  SAVESLOT_RECEIVE
+  SGLOADSLOT
+
+Important result:
+  During manual confirmation of the real EUIDDSaveSlot, the game emitted:
+
+    event = 0x8EE7556F
+
+At the retail code around 0x44D016:
+
+    push 0
+    push esi              ; same EUIDDSaveSlot
+    push 0x8EE7556F
+    call [vtable+0x124]
+
+This established 0x8EE7556F as the real confirmation event for the correct
+EUIDDSaveSlot class.
+
+The same diagnostic confirmed the user's active test profile was native
+index 0 in that specific run. This was only an observation, never a rule.
+
+==========================================================================
+8. READY STATE / V11G DIAGNOSTIC
+==========================================================================
+
+The real EUIDDSaveSlot receives event:
+
+  0x1579DAF8
+
+Its native receiver sets:
+
+  [EUIDDSaveSlot + 0x191] = 1
+
+This is a genuine ready/enable state.
+
+V11G profile-gate diagnostic:
+
+File:
+  hedge_Win11_V11G_PROFILE_GATE_DIAGNOSTIC.exe
+
+EXE SHA-256:
+  57a9e5ff65f9d9fd7ead95d0a537d435a33264568127d5cdefd014f40d2456ac
+
+ZIP SHA-256:
+  778b5eda8ee2187519cd5830eabf8ac77785de3b0509b56bbda1ab374b1477db
+
+Logged:
+  CYCLE
+  READY_EVENT
+  GATE_STATE
+  CONFIRM_FORWARD
+
+Result:
+
+- All four native indices were repeatedly seen:
+    CYCLE A=0x0F
+- Exactly one used slot was present:
+    B=0x01 in that test run
+- READY_EVENT was observed.
+- Packed GATE_STATE ended in 0101, showing both:
+    [widget+0x191] == 1
+    READY_EVENT observed
+- Manual click still emitted the real confirmation path.
+
+Conclusion:
+  The ready gate was valid, but readiness alone did not make a direct
+  confirmation-event injection equivalent to the real native flow.
+
+==========================================================================
+9. V12A5 - TRUE UI EVENT ATTEMPT
+==========================================================================
+
+Status: REJECTED
+
+File:
+  hedge_Win11_V12A5_AUTO_SINGLE_PROFILE_TRUE_UI_EVENT_TEST.exe
+
+EXE SHA-256:
+  db73112b1261e7284386f0ff59a3f571f28a53e9b592bd8e62b25b88ebcdae8a
+
+ZIP SHA-256:
+  bbbbc8266ab62047a6bd18384583654f67f8bd86abbc71d2a619a9b0740a2c9f
+
+Method:
+
+- Detect exactly one used profile.
+- Wait for a valid parent [widget+0x8C].
+- Wait for [widget+0x191] == 1.
+- Call the EUIDDSaveSlot vtable+0x124 with:
+    event  = 0x8EE7556F
+    sender = widget
+    arg3   = 0
+
+Result:
+  Nothing happened.
+
+Conclusion:
+  Injecting the final EUIDDSaveSlot confirmation event is not sufficient.
+  The native path has important state/control flow before that event.
+
