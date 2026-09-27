@@ -1,0 +1,4 @@
+*.Backup
+*.PatchNew
+*.RollbackTemp
+hedge_timing.log
