@@ -1,0 +1,102 @@
+name: Publish R1 release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'hedge.exe'
+      - '.github/workflows/release-r1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+
+      - name: Build Windows x64 patcher
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -trimpath -buildvcs=false -ldflags="-s -w" -o OverTheHedge_Patcher_R1.exe ./patcher
+
+      - name: Verify optional canonical hedge.exe
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f hedge.exe ]]; then
+            test "$(stat -c%s hedge.exe)" = "3124397"
+            test "$(sha256sum hedge.exe | awk '{print $1}')" = "9f6cf822e1927c4968dc22cc4328ea86cdd658cf486843498208be782c16dcfe"
+            echo "HAVE_HEDGE=1" >> "$GITHUB_ENV"
+          else
+            echo "HAVE_HEDGE=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/patcher
+          cp OverTheHedge_Patcher_R1.exe dist/patcher/
+          cp README.txt dist/patcher/
+          (
+            cd dist/patcher
+            zip -9 ../OverTheHedge_Enhanced_PC_Patch_R1_Patcher.zip OverTheHedge_Patcher_R1.exe README.txt
+          )
+
+          : > dist/R1_SHA256SUMS.txt
+          sha256sum OverTheHedge_Patcher_R1.exe >> dist/R1_SHA256SUMS.txt
+          sha256sum patcher/over_the_hedge_r1.rtdp1.zlib.b64 >> dist/R1_SHA256SUMS.txt
+          sha256sum README.txt >> dist/R1_SHA256SUMS.txt
+          sha256sum dist/OverTheHedge_Enhanced_PC_Patch_R1_Patcher.zip >> dist/R1_SHA256SUMS.txt
+
+          if [[ "$HAVE_HEDGE" == "1" ]]; then
+            mkdir -p dist/canonical
+            cp hedge.exe dist/canonical/hedge.exe
+            cp README.txt dist/canonical/README.txt
+            (
+              cd dist/canonical
+              zip -9 ../OverTheHedge_Enhanced_PC_Patch_R1.zip hedge.exe README.txt
+            )
+            sha256sum hedge.exe >> dist/R1_SHA256SUMS.txt
+            sha256sum dist/OverTheHedge_Enhanced_PC_Patch_R1.zip >> dist/R1_SHA256SUMS.txt
+          fi
+
+      - name: Publish GitHub Release R1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            "OverTheHedge_Patcher_R1.exe"
+            "dist/OverTheHedge_Enhanced_PC_Patch_R1_Patcher.zip"
+            "dist/R1_SHA256SUMS.txt"
+          )
+
+          if [[ "$HAVE_HEDGE" == "1" ]]; then
+            assets+=(
+              "hedge.exe"
+              "dist/OverTheHedge_Enhanced_PC_Patch_R1.zip"
+            )
+          fi
+
+          if gh release view R1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload R1 "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit R1 --title "R1" --notes-file RELEASE_NOTES.md --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create R1 "${assets[@]}" --target "$GITHUB_SHA" --title "R1" --notes-file RELEASE_NOTES.md --repo "$GITHUB_REPOSITORY"
+          fi
