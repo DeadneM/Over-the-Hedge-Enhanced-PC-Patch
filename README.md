@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/Image%20ChatGPT%2027%20sept.%202026,%2012_24_47.png" alt="Over the Hedge Enhanced PC Patch" width="100%">
+</p>
+
 # Over the Hedge - Enhanced PC Patch
 
 Modernization patch for the original PC release of **Over the Hedge**.
