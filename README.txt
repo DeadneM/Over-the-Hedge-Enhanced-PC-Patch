@@ -21,7 +21,7 @@ The protected retail backup bckhedge.exe is NOT used as a patch base.
 Original unpacked hedge.exe:
   Size: 3,124,397 bytes
   SHA-256: 81ce80f1bd5cc74183f621871e3ec4fa079bf0d694b652f7b20002cea82c1f21
-  PDB reference: d:\Ports\Oth\bin\hedge.pdb
+  PDB reference: d:\\Ports\\Oth\\bin\\hedge.pdb
 
 Protected retail executable supplied for reference:
   bckhedge.exe
