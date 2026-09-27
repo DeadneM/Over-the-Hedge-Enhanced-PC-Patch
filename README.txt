@@ -549,3 +549,290 @@ Conclusion:
   Injecting the final EUIDDSaveSlot confirmation event is not sufficient.
   The native path has important state/control flow before that event.
 
+==========================================================================
+10. NATIVE INPUT GATE DISCOVERY
+==========================================================================
+
+Static audit around the real manual confirm path near 0x44D00C found an
+important input gate before 0x44D016.
+
+Retail sequence:
+
+- Read control pointer [ESI+0x168].
+- Pass token [ESI+0x170].
+- Call control virtual method +0x68.
+- Test returned AL.
+- If AL == 0, do not confirm.
+- Only if AL != 0 does execution reach 0x44D016 and emit 0x8EE7556F.
+
+This explained why calling the final event directly did not reproduce the
+native behavior.
+
+==========================================================================
+11. V12A6 / V12A7 - FORCED INPUT RESULT
+==========================================================================
+
+V12A6
+------
+Status: REJECTED / CRASH
+
+File:
+  hedge_Win11_V12A6_AUTO_SINGLE_PROFILE_NATIVE_INPUT_TEST.exe
+
+EXE SHA-256:
+  fd00f2c30a6fb68683b08be66a6829d7e353c8be31a0a10e55f739d9e3dee284
+
+ZIP SHA-256:
+  c8e8fb8e0f363111feee3d4e234af7416b6b7e9471c20f656cd02e8dbf670f40
+
+Method:
+  Hook the native input test around 0x44D012 and force the true branch when
+  the unique slot was ready.
+
+Result:
+  Crash.
+
+
+V12A7
+------
+Status: REJECTED / CRASH
+
+File:
+  hedge_Win11_V12A7_AUTO_PROFILE_DELAYED_NATIVE_INPUT_TEST.exe
+
+EXE SHA-256:
+  265b5a2121b2e156c7b631219d3b7ab4414d1af5c7d6625c358362aeb30cd68e
+
+ZIP SHA-256:
+  0a6ca89ce9e73b69afdaffac60044a968ecf434b81eea97ca07067b04c307624
+
+Method:
+  Same native input-result override, but delayed by at least 1000 ms after the
+  genuine ready event using GetTickCount.
+
+Result:
+  Crash.
+
+Permanent rule:
+  Never force or modify the AL result/branch at 0x44D012 again.
+
+==========================================================================
+12. V11H - INPUT DIAGNOSTIC
+==========================================================================
+
+Status: DIAGNOSTIC / CRASHED, BUT LOG WAS USEFUL
+
+File:
+  hedge_Win11_V11H_PROFILE_INPUT_DIAGNOSTIC.exe
+
+EXE SHA-256:
+  ff8c49877639f21b628efe0edc888a46c499899a4799ff6ec5640f86a522504d
+
+ZIP SHA-256:
+  c005cf1f5df11e569378938f2c3ed4ece1ff6aee8ac2d5d95b1792251db0b5c1
+
+Log:
+  hedge_profile_input.log
+
+Useful lines captured before the diagnostic crashed:
+
+  WINMSG A=00000201 B=00000001 C=02F307CE
+  WINMSG A=00000202 B=00000000 C=02F307CE
+  INPUT_TRUE A=029CC068 B=00000003 C=061EA160
+
+Interpretation:
+
+- The user's real manual confirmation was a normal left mouse click.
+- WM_LBUTTONDOWN = 0x0201
+- WM_LBUTTONUP   = 0x0202
+- The game's native input control then saw token 3 as true.
+
+The click in that 3840x2160 test occurred at x=1998, y=755.
+
+Important design decision:
+  Although this identified the physical input source, the project explicitly
+  rejects mouse/keyboard emulation as an auto-profile solution.
+
+==========================================================================
+13. V12A8 - SYNTHETIC WIN32 CLICK
+==========================================================================
+
+Status: REJECTED BY DESIGN
+
+File:
+  hedge_Win11_V12A8_AUTO_PROFILE_POSTMESSAGE_CLICK_TEST.exe
+
+EXE SHA-256:
+  68779908829a302df84fbb1a96815288c42b1654154d6daeb18ebd52490e48b8
+
+ZIP SHA-256:
+  3160ee2e1bd3c7ffd3743c939e6bd18456bcdd8ef286e049d8df31d44007b0ae
+
+Method:
+  Attempted to reproduce the real manual click through Win32 messages after
+  profile detection/readiness.
+
+This approach was explicitly rejected.
+
+Permanent rule:
+  Do not emulate mouse clicks, keyboard presses, window messages or screen
+  coordinates for auto-profile.
+
+==========================================================================
+14. V12A9 / V12A10 - WRONG NATIVE LOAD WRAPPER
+==========================================================================
+
+V12A9
+------
+Status: REJECTED / STABLE BUT NO EFFECT
+
+File:
+  hedge_Win11_V12A9_AUTO_SINGLE_PROFILE_NATIVE_LOAD_WRAPPER_TEST.exe
+
+EXE SHA-256:
+  9ecd910f83e37c88bd18440c7badfee038e8b74a2d3ec06306d6a8bc22cc02f7
+
+ZIP SHA-256:
+  802ee910cb68158daa921839d81f8c69bac37df421570262dfdd164eb08f417d
+
+Method:
+  Use wrapper 0x42F690(index), which internally loads:
+
+    ECX = [0x6FA7E8]
+    push index
+    call 0x42F260
+
+V12A9 did not crash, but did not perform the profile transition.
+
+
+V12A10
+-------
+Status: REJECTED / NO EFFECT
+
+File:
+  hedge_Win11_V12A10_AUTO_SINGLE_PROFILE_NATIVE_FLOW_TEST.exe
+
+EXE SHA-256:
+  b4110283faa08c6c8e64fc6a6f62ddfd07a6aa02a107a81418e03dcb206811dc
+
+ZIP SHA-256:
+  10a61525646a84616fa0bdff033d8b5fa310702e192dd9c706d63a99027b27ab
+
+Change from A9:
+  Removed WndProc from auto-profile and tried the same wrapper from the game's
+  own profile UI flow after additional stable slot cycles.
+
+Result:
+  Still no visible profile activation.
+
+Conclusion:
+  The problem was not timing. 0x42F690 was the wrong semantic operation.
+
+==========================================================================
+15. V11I - TRUE NATIVE LOAD PATH DIAGNOSTIC
+==========================================================================
+
+Status: DIAGNOSTIC
+
+File:
+  hedge_Win11_V11I_NATIVE_LOAD_PATH_DIAGNOSTIC.exe
+
+EXE SHA-256:
+  efda5235aad98d553faf349015835331fcc41cfe21b6d0608e095ed72e9c7012
+
+ZIP SHA-256:
+  0f3c631bf78d5b9d115f5c3aa3c412e97e3e7c32dae06ea54d194d6d0352ff79
+
+Log:
+  hedge_native_load.log
+
+Hooks:
+
+0x42F690 entry:
+  LOAD_WRAPPER
+  A = requested native slot index
+  B = caller return address
+  C = [0x6FA7E8]
+
+0x42F260 entry:
+  SGLOAD_ENTRY
+  A = requested native slot index
+  B = caller return address
+  C = actual incoming save-manager ECX
+
+0x42F6A0 return transform:
+  WRAPPER_RETURN
+  A = FFFFFFFF success / 00000000 failure
+
+Manual-selection result:
+
+The game called the wrapper for native indices:
+
+  0, 1, 2, 3, then 0 again
+
+Typical caller:
+  0x47D3B8
+
+The SGLOAD_ENTRY calls came from the 0x42F690 wrapper, with every call
+reporting success.
+
+Critical conclusion:
+  0x42F690 / 0x42F260 enumerate/load slot data for UI/script state.
+  They are NOT the high-level action that activates the selected profile.
+
+This invalidated the semantic basis of V12A9 and V12A10.
+
+==========================================================================
+16. V11J - PROFILE PARENT ROUTE DIAGNOSTIC
+==========================================================================
+
+Status: DIAGNOSTIC
+
+File:
+  hedge_Win11_V11J_PROFILE_PARENT_ROUTE_DIAGNOSTIC.exe
+
+EXE SHA-256:
+  1b26ad39b5ac6c6167a6f4152fab6f4d36d736ba1c609f502936651b116bd7c8
+
+ZIP SHA-256:
+  62e1c2f3f4426b99daa7920af8aa6f17420a4b8b52144049319907847156e557
+
+Log:
+  hedge_profile_parent.log
+
+Manual click produced:
+
+  PARENT_ROUTE A=06164160 B=0616D430 C=0044E080
+  PARENT_META  A=0616D430 B=006932E0 C=06164160
+
+Meaning:
+
+  child EUIDDSaveSlot = 0x06164160 in that run
+  parent UI object    = 0x0616D430
+  parent vtable       = 0x006932E0
+  parent handler      = 0x0044E080
+
+Static audit of 0x44E080 showed that it is itself only another forwarder.
+
+Behavior of 0x44E080:
+
+- If [this+0x8C] exists, forward the same event to:
+    parent = [this+0x8C]
+    handler = [parent.vtable+0x124]
+- Otherwise, forward to the global fallback:
+    object = [0x702828]
+    handler = [global.vtable+0x08]
+
+Conclusion:
+  V11J identified an intermediate UI layer, not the final profile action.
+
+==========================================================================
+17. V11K - PROFILE PARENT CHAIN DIAGNOSTIC
+==========================================================================
+
+Status: DIAGNOSTIC
+
+File:
+  hedge_Win11_V11K_PROFILE_PARENT_CHAIN_DIAGNOSTIC.exe
+
+EXE SHA-256:
