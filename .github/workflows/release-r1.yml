@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'hedge.exe'
+      - 'RELEASE_NOTES.md'
       - '.github/workflows/release-r1.yml'
 
 permissions:
