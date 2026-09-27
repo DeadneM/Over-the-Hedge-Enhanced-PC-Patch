@@ -41,10 +41,6 @@ Supported original SHA-256:
 R1 patched SHA-256:
 `9f6cf822e1927c4968dc22cc4328ea86cdd658cf486843498208be782c16dcfe`
 
-### Pre-patched executable
-
-The R1 release also includes the validated modified `hedge.exe` directly.
-
 ## Notes
 
 - The protected/encrypted `bckhedge.exe` is **not** a supported patch source.
