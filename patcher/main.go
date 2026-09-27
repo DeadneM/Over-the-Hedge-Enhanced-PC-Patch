@@ -6,6 +6,7 @@ import (
     "compress/zlib"
     "crypto/sha256"
     _ "embed"
+    "encoding/base64"
     "encoding/binary"
     "encoding/hex"
     "errors"
@@ -25,8 +26,8 @@ const (
     TargetSize int64 = 3124397
 )
 
-//go:embed over_the_hedge_r1.rtdp1.zlib
-var embeddedPatch []byte
+//go:embed over_the_hedge_r1.rtdp1.zlib.b64
+var embeddedPatchB64 string
 
 type options struct { gameDir string; noPause bool }
 
@@ -288,7 +289,13 @@ func main() {
     }
 
     fmt.Println("[ .. ] Building cumulative R1...")
-    target, e := applyRTDP1(source, embeddedPatch)
+    patchData, e := base64.StdEncoding.DecodeString(strings.TrimSpace(embeddedPatchB64))
+    if e != nil {
+        fmt.Println("[ERROR] Embedded R1 delta is invalid:", e)
+        exit = 1
+        return
+    }
+    target, e := applyRTDP1(source, patchData)
     if e != nil {
         fmt.Println("[ERROR]", e)
         fmt.Println("No unverified output was installed.")
