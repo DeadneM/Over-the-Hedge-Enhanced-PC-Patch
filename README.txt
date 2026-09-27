@@ -1077,3 +1077,304 @@ Rejected timing changes:
 
 ==========================================================================
 25. DIRECTINPUT AUDIT
+==========================================================================
+
+The PC input layer uses DirectInput 8.
+
+DirectInput8Create:
+  call site / initialization area around 0x57C87D
+
+Relevant native data formats:
+
+Joystick / gamepad:
+  data format at 0x6E139C
+  DIDATAFORMAT:
+    dwFlags    = 1
+    dwDataSize = 0x110
+    dwNumObjs  = 0xA4
+
+  This matches DIJOYSTATE2.
+
+  Cooperative level:
+    0x57E1A3
+    push 0x05
+
+  0x05 =
+    DISCL_EXCLUSIVE
+    DISCL_FOREGROUND
+
+  This mode is retained.
+  It is consistent with the original joystick / force-feedback design.
+
+Mouse:
+  data format at 0x6E15A4
+  DIDATAFORMAT:
+    dwFlags    = 2
+    dwDataSize = 0x14
+    dwNumObjs  = 0x0B
+
+  This matches DIMOUSESTATE2 / relative mouse input.
+
+  Cooperative level:
+    0x57E3A7
+    push 0x06
+
+  0x06 =
+    DISCL_NONEXCLUSIVE
+    DISCL_FOREGROUND
+
+  This is already appropriate for modern borderless operation and remains
+  unchanged.
+
+Keyboard:
+  data format at 0x6E17AC
+  DIDATAFORMAT:
+    dwFlags    = 2
+    dwDataSize = 0x100
+    dwNumObjs  = 0x100
+
+  This is the standard 256-key DirectInput keyboard layout.
+
+  Cooperative level before V12A13:
+    0x57E358
+    push 0x16
+
+  0x16 =
+    DISCL_NONEXCLUSIVE
+    DISCL_FOREGROUND
+    DISCL_NOWINKEY
+
+The extra DISCL_NOWINKEY bit intentionally disables the Windows key while
+the game is in the foreground.
+
+The mouse is therefore NOT using an old exclusive-input mode and does not
+need an input-mode patch.
+
+==========================================================================
+26. V12A13 - WINDOWS KEY / DESKTOP INTEGRATION TEST
+==========================================================================
+
+STATUS:
+  TEST CANDIDATE.
+  Built strictly from validated V12A11 canonical.
+
+Objective:
+  Improve desktop integration under modern Windows by allowing the Windows
+  key while the game is in the foreground.
+
+Patch:
+  VA 0x57E358
+
+Before:
+  6A 16
+  push 0x16
+
+After:
+  6A 06
+  push 0x06
+
+Effect:
+  Removes only:
+    DISCL_NOWINKEY (0x10)
+
+Preserves:
+    DISCL_NONEXCLUSIVE (0x02)
+    DISCL_FOREGROUND   (0x04)
+
+No other DirectInput behavior is changed.
+
+Not changed:
+  - joystick remains EXCLUSIVE | FOREGROUND (0x05);
+  - mouse remains NONEXCLUSIVE | FOREGROUND (0x06);
+  - keyboard data format remains unchanged;
+  - all bindings remain unchanged;
+  - rumble / force feedback remains unchanged;
+  - validated Alt+F4 remains unchanged;
+  - borderless behavior remains unchanged;
+  - auto-profile remains unchanged.
+
+Test:
+  1. Launch the game normally.
+  2. Reach gameplay.
+  3. Press the Windows key.
+  4. Confirm the Start menu can open normally.
+  5. Return to the game and confirm controls still work.
+  6. Confirm Alt+Tab and Alt+F4 still behave normally.
+  7. Confirm gamepad and mouse behavior are unchanged.
+
+Packaging:
+  ZIP contains EXACTLY:
+    hedge.exe
+    README.txt
+
+V12A13 EXE SHA-256:
+  9f6cf822e1927c4968dc22cc4328ea86cdd658cf486843498208be782c16dcfe
+
+==========================================================================
+END OF TECHNICAL NOTEBOOK - V12A13 WINDOWS KEY TEST
+==========================================================================
+
+==========================================================================
+27. POST-V12A13 MODERNIZATION AUDIT
+==========================================================================
+
+STATUS:
+  AUDIT COMPLETE.
+  NO ADDITIONAL CODE PATCH RETAINED.
+
+Canonical executable remains:
+  V12A13
+
+The purpose of this audit was to continue looking for useful Windows 11 /
+modern-PC improvements without adding speculative or cosmetic binary changes.
+
+The following areas were inspected.
+
+--------------------------------------------------------------------------
+27.1 AUDIO
+--------------------------------------------------------------------------
+
+Backend:
+  DirectSound
+
+DirectSoundCreate thunk:
+  0x67D7E4
+
+Main audio initialization:
+  around 0x593850
+
+The game:
+  - creates DirectSound normally;
+  - uses DSSCL_PRIORITY;
+  - creates a primary buffer with 3D control;
+  - obtains IDirectSound3DListener;
+  - configures native 3D distance behavior;
+  - releases its audio objects in the native cleanup path around 0x593C40;
+  - releases DirectSound itself around 0x593C92.
+
+No forced obsolete low sample rate or mono output path was identified.
+
+Conclusion:
+  No audio patch retained.
+
+--------------------------------------------------------------------------
+27.2 SAVE / PROFILE / SCREENSHOT PATHS
+--------------------------------------------------------------------------
+
+Windows folder helper:
+  around 0x57BF00
+
+The game dynamically resolves:
+  shell32.dll
+  SHGetFolderPathA
+
+and requests:
+  CSIDL_PERSONAL = 5
+
+This resolves the Windows Documents folder.
+
+Known path/configuration names include:
+  BX_GAME_PATH
+  BX_SAVE_DIR
+  BX_SCREENSHOT_PATH
+  BX_SCREENSHOT_DIR
+
+Default path fragments include:
+  My Games\
+  Save\
+
+The local installation-directory path is used as a fallback if Windows folder
+resolution fails.
+
+Screenshots use the same resolved path architecture.
+
+Conclusion:
+  Saves and screenshots are already compatible with normal modern Windows
+  permissions.
+  Do not relocate them and risk splitting existing profiles.
+
+--------------------------------------------------------------------------
+27.3 SHUTDOWN / PROCESS LIFECYCLE
+--------------------------------------------------------------------------
+
+Validated Alt+F4 enters the retail WM_CLOSE path:
+  0x41C81D
+
+Retail close:
+  [0x734540] = 1
+  PostQuitMessage(0)
+
+Main loop observes the quit state around:
+  0x57ED6B
+
+Native engine transition:
+  0x45F700
+
+The normal path uses orderly engine cleanup rather than an abrupt
+TerminateProcess.
+
+A V12A14 experiment added ShowCursor(TRUE) to the normal cleanup because the
+retail game hides the cursor at startup with ShowCursor(FALSE).
+
+V12A14 was explicitly REJECTED by the user because the desktop cursor already
+returns normally in real use and the patch had no meaningful practical
+benefit.
+
+Rule:
+  Do NOT reintroduce V12A14 cursor restoration.
+
+--------------------------------------------------------------------------
+27.4 CPU / THREAD POLICY
+--------------------------------------------------------------------------
+
+No SetProcessAffinityMask or SetThreadAffinityMask usage was found.
+
+The engine has its own normal Windows thread-priority abstraction with levels
+such as:
+  IDLE
+  LOWEST
+  BELOW_NORMAL
+  NORMAL
+  ABOVE_NORMAL
+  HIGHEST
+
+No global TIME_CRITICAL policy or forced single-core affinity was identified.
+
+Conclusion:
+  No CPU-affinity or priority patch retained.
+
+--------------------------------------------------------------------------
+27.5 D3D9 DEVICE CREATION
+--------------------------------------------------------------------------
+
+The renderer calls GetDeviceCaps around:
+  0x58644D
+
+It checks:
+  D3DDEVCAPS_HWTRANSFORMANDLIGHT
+
+and selects hardware vertex processing when supported.
+
+The CreateDevice behavior on a modern GPU corresponds to:
+  D3DCREATE_HARDWARE_VERTEXPROCESSING
+  D3DCREATE_MULTITHREADED
+
+Therefore the game is not being forced through software vertex processing.
+
+Conclusion:
+  No CreateDevice patch retained.
+
+--------------------------------------------------------------------------
+27.6 SHADER CAPABILITY PATH
+--------------------------------------------------------------------------
+
+Renderer capability data is inspected directly from D3DCAPS9.
+
+Relevant checks around:
+  0x586456
+
+include:
+  PixelShaderVersion >= 1.1
+  simultaneous texture count >= 4
+
+Advanced renderer state:
