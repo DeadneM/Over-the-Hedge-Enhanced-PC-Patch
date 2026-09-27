@@ -1651,3 +1651,52 @@ CURRENT CANONICAL CODE:
 V12A13 EXE SHA-256:
   9f6cf822e1927c4968dc22cc4328ea86cdd658cf486843498208be782c16dcfe
 
+No binary changes were added by the post-V12A13 audit.
+
+Frozen validated features include:
+  - Large Address Aware / 4 GB;
+  - native borderless windowed rendering;
+  - desktop-sized HWND with independent render resolution;
+  - 720p / 1080p / 2K / 4K / Desktop resolution menu;
+  - dynamic aspect ratio / Hor+ FOV;
+  - native HUD behavior;
+  - AF16;
+  - trilinear mip filtering;
+  - conservative positive stage-0 MIP LOD-bias clamp;
+  - native FSAA Off / 2x / 4x;
+  - Windows 11 DPI awareness;
+  - native orderly Alt+F4;
+  - intro-video skip only;
+  - automatic activation of exactly one existing profile through the proven
+    high-level native profile transition;
+  - Windows key enabled by removing only DISCL_NOWINKEY.
+
+Explicitly rejected / forbidden for future builds:
+  - forced maximum AA;
+  - video/TAB attract-mode experiments;
+  - mouse or keyboard emulation for auto-profile;
+  - synthetic Win32 profile clicks;
+  - forced AL/input-test results;
+  - direct SGLoadSlot as profile activation;
+  - raw profile-confirmation event injection;
+  - treating 0x42F690 as the profile activation path;
+  - changing the native 60 Hz fixed-step without new evidence;
+  - V12A14 ShowCursor cleanup patch;
+  - speculative CPU affinity/priority patches;
+  - fabricated VRAM/HD-texture unlocks;
+  - fabricated shadow-map resolution patches;
+  - custom 8x FSAA unless deliberately developed later as a separate engine
+    extension.
+
+Development rule:
+  Future code builds MUST start from V12A13 canonical unless a later build is
+  explicitly validated by the user.
+
+Packaging rule:
+  Every distributed ZIP must contain EXACTLY:
+    hedge.exe
+    README.txt
+
+==========================================================================
+END OF TECHNICAL NOTEBOOK - V12A13 CANONICAL AUDITED
+==========================================================================
