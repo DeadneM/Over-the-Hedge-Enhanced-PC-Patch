@@ -1378,3 +1378,276 @@ include:
   simultaneous texture count >= 4
 
 Advanced renderer state:
+  around renderer +0x1CB8
+
+On modern D3D9 hardware the advanced capability path is selected naturally.
+
+Conclusion:
+  No forced shader-capability patch retained.
+
+--------------------------------------------------------------------------
+27.7 DEPTH BUFFER
+--------------------------------------------------------------------------
+
+Native format helper:
+  0x58E910
+
+Retail result:
+  0x4B
+
+D3D9 format:
+  D3DFMT_D24S8
+
+The game therefore already uses:
+  24-bit depth
+  8-bit stencil
+
+This is preferable to an old D16 configuration and is required by existing
+stencil effects.
+
+Conclusion:
+  Depth format is frozen at native D24S8.
+
+--------------------------------------------------------------------------
+27.8 SHADOW SYSTEM
+--------------------------------------------------------------------------
+
+The EShadowSpot path was audited.
+
+Class:
+  EShadowSpot
+
+Class string:
+  around 0x6926C0
+
+Constructor / related native path:
+  around 0x445BA0
+  actor AddSpotShadow flow around 0x409FA0 / 0x426300
+
+The system is a projected/blob spot-shadow mechanism using existing resources.
+It is NOT a conventional dynamic 256x256 or 512x512 shadow-map renderer.
+
+A 0x100 / 256 constant initially suspected to be a shadow-map size was traced
+back to EUIObjectNode and therefore belongs to UI code.
+
+Conclusion:
+  No fake "shadow resolution" patch retained.
+
+--------------------------------------------------------------------------
+27.9 VRAM / TEXTURE QUALITY / MIP LIMITS
+--------------------------------------------------------------------------
+
+Global D3D device:
+  0x7338F8
+
+No active use of:
+  IDirect3DDevice9::GetAvailableTextureMem
+
+was identified in the renderer initialization / texture-management flow.
+
+No GPU-memory threshold such as:
+  32 MB
+  64 MB
+  128 MB
+
+was found driving automatic texture-quality reduction.
+
+ERTexture:
+  class string around 0x6CC270
+  loader family around 0x5EB700
+
+The texture loader consumes the resource/mip data supplied by the asset.
+
+The direct IDirect3DDevice9::CreateTexture calls found around:
+  0x4AE928
+  0x4AEAD3
+
+create temporary A8R8G8B8 conversion/copy textures and are not the normal
+world-texture mip chain.
+
+Their single mip level is therefore intentional and is NOT a texture-quality
+limitation.
+
+Conclusion:
+  No hidden VRAM-based downscale or "HD texture unlock" was found.
+  Do not fabricate one.
+
+--------------------------------------------------------------------------
+27.10 FSAA / MULTISAMPLING
+--------------------------------------------------------------------------
+
+The retail video menu contains exactly:
+  FSAA_VALUE_0
+  FSAA_VALUE_1
+  FSAA_VALUE_2
+
+There is no:
+  FSAA_VALUE_3
+
+Menu construction:
+  around 0x464616 - 0x464755
+
+Renderer maximum-FSAA getter:
+  0x5881E0
+  returns renderer +0xB8
+
+Current selection clamp:
+  0x5881C0
+
+Maximum setter:
+  0x588240
+
+The maximum setter itself rejects values above 2:
+  cmp eax,2
+  ja  reject
+
+The renderer performs correct D3D9 capability tests using:
+  IDirect3D9::CheckDeviceMultiSampleType
+
+4x tests:
+  0x5864B4
+  0x5864D4
+
+2x fallback tests:
+  0x5864F8
+  0x586518
+
+Both the color/backbuffer format and depth/stencil format are checked.
+
+Native index-to-D3DMULTISAMPLE_TYPE table:
+  0x6F3084
+
+Values:
+  index 0 -> 0  = D3DMULTISAMPLE_NONE
+  index 1 -> 2  = D3DMULTISAMPLE_2_SAMPLES
+  index 2 -> 4  = D3DMULTISAMPLE_4_SAMPLES
+  index 3 -> -1 = invalid / unsupported
+
+Therefore 8x is NOT a hidden retail mode.
+
+Adding 8x correctly would require:
+  - additional D3D9 capability tests;
+  - extending renderer maximum level from 2 to 3;
+  - extending the enum translation table;
+  - extending the UI;
+  - adding a new localized FSAA value.
+
+This would be an engine extension rather than unlocking an existing option.
+
+Conclusion:
+  Keep native Off / 2x / 4x behavior.
+  Never force maximum AA.
+
+--------------------------------------------------------------------------
+27.11 BRIGHTNESS / GAMMA UNDER BORDERLESS
+--------------------------------------------------------------------------
+
+The executable contains:
+  Brightness
+  \gamma
+
+Brightness configuration is converted into a floating-point render value:
+  global around 0x6FA808
+
+The value is then passed into the engine rendering path through a native
+render-object method, including references around:
+  0x42D4BD
+  0x42D6FD
+
+The brightness control does NOT depend solely on an exclusive-fullscreen
+hardware SetGammaRamp path.
+
+Conclusion:
+  The borderless conversion does not require a separate gamma fix.
+
+--------------------------------------------------------------------------
+27.12 GAMEPAD HOT-PLUG
+--------------------------------------------------------------------------
+
+The PC executable contains active controller-change states/messages:
+  GAMEPAD_P1_LOST
+  GAMEPAD_P2_LOST
+  GAMEPADS_CHANGED_*
+
+Native UI/API wrappers include:
+  EUIMan.HasControllerReconnected
+  EUIMan.IsControllerInserted
+  EUIMan.ResetPlayerControllers
+
+These call the actual DirectInput controller manager around:
+  0x57A440 - 0x57A5C0
+
+The controller system therefore has a real PC reconnection path rather than
+only leftover console strings.
+
+Conclusion:
+  No hot-plug replacement or XInput injection retained.
+
+--------------------------------------------------------------------------
+27.13 GAMEPAD DEADZONE / FORCE FEEDBACK
+--------------------------------------------------------------------------
+
+Joystick input uses:
+  DIJOYSTATE2
+
+Data format:
+  around 0x6E139C
+
+Cooperative level:
+  0x57E1A3
+  DISCL_EXCLUSIVE | DISCL_FOREGROUND
+
+The initialization path around 0x57E180 also enumerates joystick objects and
+sets up the existing force-feedback/effect system.
+
+No simple global DIPROP_DEADZONE override was found that would justify a
+blind modern deadzone replacement.
+
+Conclusion:
+  Keep native analog curves/deadzones unless a real runtime drift or
+  excessive-deadzone defect is demonstrated.
+
+--------------------------------------------------------------------------
+27.14 RESOLUTION / INTERNAL DIMENSION LIMITS
+--------------------------------------------------------------------------
+
+The primary D3DPRESENT_PARAMETERS width/height fields are maintained as
+32-bit values.
+
+Some auxiliary renderer operations read low 16-bit portions of those values,
+but this still covers dimensions far beyond normal D3D9 desktop resolutions.
+
+No internal 2048 or 4096 framebuffer clamp was identified that would negate
+the validated 4K/Desktop resolution support.
+
+The existing Desktop mode therefore remains the correct arbitrary-resolution
+path.
+
+Conclusion:
+  No additional resolution-limit bypass retained.
+
+--------------------------------------------------------------------------
+27.15 WINDOWS SYSTEM COMMANDS
+--------------------------------------------------------------------------
+
+The retail WndProc does not explicitly suppress every WM_SYSCOMMAND path.
+
+In theory, a very long controller-only idle session could allow normal Windows
+screen-saver / monitor-power behavior depending on OS settings.
+
+No real user-facing defect has been observed.
+
+Conclusion:
+  No screensaver/power-message patch retained.
+  This is intentionally not treated as a problem without runtime evidence.
+
+==========================================================================
+28. CURRENT CANONICAL STATE AFTER FULL AUDIT
+==========================================================================
+
+CURRENT CANONICAL CODE:
+  V12A13
+
+V12A13 EXE SHA-256:
+  9f6cf822e1927c4968dc22cc4328ea86cdd658cf486843498208be782c16dcfe
+
